@@ -3,9 +3,11 @@
 #
 # Windows usage:
 #   mingw32-make all
+#   start.bat          <- runs collector + dashboard (see start.bat)
 #
 # Linux usage:
 #   make all
+#   make run
 
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -I .
@@ -28,18 +30,19 @@ DASHBOARD  := $(OUTDIR)/dashboard$(EXT)
 SIMULATOR  := $(OUTDIR)/simulator$(EXT)
 TESTS      := $(OUTDIR)/test_netwatch$(EXT)
 
-.PHONY: all clean test run-demo help
+.PHONY: all clean test run help
 
 all: $(OUTDIR) $(COLLECTOR) $(AGENT) $(DASHBOARD) $(SIMULATOR) $(TESTS)
 	@echo ""
 	@echo "=== Build complete ==="
-	@echo "  collector$(EXT)   - receives NWP packets from agents"
-	@echo "  agent$(EXT)       - runs on each monitored node"
-	@echo "  dashboard$(EXT)   - serves browser UI on port 8080"
-	@echo "  simulator$(EXT)   - virtual nodes for demo/testing"
-	@echo "  test_netwatch$(EXT) - run unit tests"
+	@echo "  collector$(EXT)     - receives NWP packets from agents"
+	@echo "  agent$(EXT)         - runs on each monitored node"
+	@echo "  dashboard$(EXT)     - serves browser UI on port 8080"
+	@echo "  simulator$(EXT)     - virtual nodes for testing"
+	@echo "  test_netwatch$(EXT) - unit tests"
 	@echo ""
-	@echo "Quick start: make run-demo"
+	@echo "Windows: run start.bat to launch the full stack"
+	@echo "Linux:   make run"
 
 $(OUTDIR):
 	$(MKDIR)
@@ -69,24 +72,17 @@ test: $(TESTS)
 	@echo "Running NetWatch test suite..."
 	@$(TESTS)
 
-# Demo: starts collector + simulator + dashboard in background
-# Open http://localhost:8080 after running this
-run-demo: all
-	@echo "Starting NetWatch demo..."
-	@echo "Open http://localhost:8080 in your browser"
-ifeq ($(OS),Windows_NT)
-	start /B $(COLLECTOR)
-	timeout /t 1 > nul
-	start /B $(DASHBOARD)
-	timeout /t 1 > nul
-	$(SIMULATOR) 6 127.0.0.1 attack
-else
+# Linux/macOS only: launch collector + dashboard in background
+run: all
+	@echo "Starting collector on UDP :9000..."
 	$(COLLECTOR) &
-	sleep 1
+	@sleep 1
+	@echo "Starting dashboard on http://localhost:8080"
 	$(DASHBOARD) &
-	sleep 1
-	$(SIMULATOR) 6 127.0.0.1 attack
-endif
+	@echo ""
+	@echo "Dashboard ready -> http://localhost:8080"
+	@echo "Now run agents:  ./bin/agent <collector-ip>"
+	@echo "Or simulator:    ./bin/simulator 4 127.0.0.1"
 
 clean:
 ifeq ($(OS),Windows_NT)
@@ -99,7 +95,15 @@ endif
 
 help:
 	@echo "Targets:"
-	@echo "  make all       - build everything"
-	@echo "  make test      - run 24 unit tests"
-	@echo "  make run-demo  - start full demo (collector + sim + dashboard)"
-	@echo "  make clean     - remove build artifacts"
+	@echo "  mingw32-make all   - build all executables"
+	@echo "  mingw32-make test  - run 24 unit tests"
+	@echo "  mingw32-make clean - remove build artifacts"
+	@echo ""
+	@echo "Running (Windows):"
+	@echo "  Double-click start.bat  OR  run each binary manually:"
+	@echo "    bin\\collector.exe"
+	@echo "    bin\\dashboard.exe"
+	@echo "    bin\\agent.exe 127.0.0.1"
+	@echo ""
+	@echo "Running (Linux):"
+	@echo "  make run"

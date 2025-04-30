@@ -148,7 +148,7 @@ async function fetchDevices() {
   try {
     const r = await fetch('/api/devices');
     devices = await r.json();
-  } catch(e) { /* collector not running — use demo data */ }
+  } catch(e) { /* collector not reachable */ }
 }
 
 async function fetchAlerts() {
