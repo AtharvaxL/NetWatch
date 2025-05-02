@@ -104,7 +104,7 @@ static void on_alert(const AlertEvent& ev) {
 }
 
 // ---------------------------------------------------------
-// Snapshot thread — writes devices.json every 2 seconds
+// Snapshot thread — writes devices.json every 2 seconds (atomic)
 // ---------------------------------------------------------
 static void snapshot_thread_fn() {
     while (g_running) {
@@ -115,8 +115,18 @@ static void snapshot_thread_fn() {
         #endif
         g_registry.expire_stale(STALE_TIMEOUT);
         std::string snap = g_registry.snapshot_json();
-        std::ofstream f("devices.json");
-        if (f.is_open()) f << snap;
+
+        // Atomic write: write to .tmp first, then rename.
+        // The dashboard will never read a partial file.
+        {
+            std::ofstream f("devices.tmp");
+            if (f.is_open()) {
+                f << snap;
+                f.close();
+                std::remove("devices.json");
+                std::rename("devices.tmp", "devices.json");
+            }
+        }
         log("INFO", "Snapshot written (" +
             std::to_string(g_registry.online_count()) + " online, " +
             std::to_string(g_registry.total_count()) + " total)");
@@ -151,8 +161,13 @@ int main(int argc, char* argv[]) {
     { std::ofstream f("devices.json"); f << "[]"; }
     { std::ofstream f("alerts.json");  }
 
-    log("INFO", "NetWatch Collector starting on UDP port " +
-        std::to_string(COLLECTOR_PORT));
+    log("INFO", "==============================================");
+    log("INFO", "  NetWatch Collector v1.0");
+    log("INFO", "  UDP port : " + std::to_string(COLLECTOR_PORT));
+    log("INFO", "  Snapshot : devices.json (every 2s)");
+    log("INFO", "  Alerts   : alerts.json (on event)");
+    log("INFO", "==============================================");
+    log("INFO", "Waiting for NWP agents...");
 
 #ifdef _WIN32
     WSADATA wsa{};
