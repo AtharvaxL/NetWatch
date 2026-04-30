@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetWatch — Live Network Intelligence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
+    --border: #30363d; --text: #e6edf3; --text2: #8b949e;
+    --accent: #58a6ff; --green: #3fb950; --red: #f85149;
+    --yellow: #d29922; --purple: #a371f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  header h1 { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+  header h1 span { color: var(--text2); font-weight: 400; font-size: 13px; margin-left: 10px; }
+  .stats { display: flex; gap: 20px; }
+  .stat { text-align: center; }
+  .stat-val { font-size: 22px; font-weight: 700; color: var(--green); }
+  .stat-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+  #graph-container { flex: 1; position: relative; overflow: hidden; }
+  svg#graph { width: 100%; height: 100%; }
+
+  .sidebar { width: 320px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; padding: 10px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text2); transition: color 0.2s; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { flex: 1; overflow-y: auto; display: none; padding: 0; }
+  .tab-content.active { display: block; }
+
+  /* Device list */
+  .device-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+  .device-item:hover { background: var(--surface2); }
+  .device-item.selected { background: var(--surface2); border-left: 3px solid var(--accent); }
+  .device-name { font-size: 13px; font-weight: 600; }
+  .device-ip   { font-size: 11px; color: var(--text2); font-family: monospace; }
+  .device-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-left: 6px; }
+  .badge-online  { background: #1a3a1a; color: var(--green); }
+  .badge-offline { background: #3a1a1a; color: var(--red); }
+  .badge-alert   { background: #3a2a1a; color: var(--yellow); }
+
+  /* Alerts */
+  .alert-item { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .alert-rule   { font-size: 12px; font-weight: 700; }
+  .alert-detail { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .alert-meta   { font-size: 10px; color: var(--text2); margin-top: 3px; font-family: monospace; }
+  .sev-1 .alert-rule { color: var(--green); }
+  .sev-2 .alert-rule { color: var(--yellow); }
+  .sev-3 .alert-rule { color: var(--red); }
+
+  /* Packet inspector */
+  .inspector { padding: 12px 14px; }
+  .inspector h3 { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .packet-field { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .field-name  { color: var(--text2); font-family: monospace; }
+  .field-value { color: var(--accent); font-family: monospace; font-weight: 600; }
+  .field-desc  { color: var(--text2); font-size: 10px; margin-left: 8px; }
+  .packet-hex  { font-family: monospace; font-size: 11px; color: var(--purple); word-break: break-all; background: var(--surface2); padding: 8px; border-radius: 4px; margin-top: 8px; line-height: 1.6; }
+
+  /* Graph nodes/edges */
+  .node circle { stroke-width: 2; cursor: pointer; transition: r 0.2s; }
+  .node text   { font-size: 10px; fill: var(--text2); pointer-events: none; }
+  .link { stroke: var(--border); stroke-width: 1.5; opacity: 0.6; }
+  .link.active { stroke: var(--accent); stroke-width: 2.5; opacity: 0.8; }
+  .link.alert  { stroke: var(--red); stroke-width: 3; opacity: 1; animation: pulse-link 0.8s ease-in-out infinite alternate; }
+  @keyframes pulse-link { from { opacity: 0.4; } to { opacity: 1; } }
+
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--text2); font-size: 13px; }
+  .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>⬡ NETWATCH <span>Live Network Intelligence Platform</span></h1>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="stat-online">0</div><div class="stat-label">Online</div></div>
+    <div class="stat"><div class="stat-val" id="stat-total" style="color:var(--accent)">0</div><div class="stat-label">Total</div></div>
+    <div class="stat"><div class="stat-val" id="stat-alerts" style="color:var(--red)">0</div><div class="stat-label">Alerts</div></div>
+    <div class="stat"><div class="stat-val" id="stat-bw" style="color:var(--purple)">0</div><div class="stat-label">MB/s</div></div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="graph-container">
+    <svg id="graph"></svg>
+  </div>
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <div class="tab active" data-tab="devices">Devices</div>
+      <div class="tab" data-tab="alerts">Alerts</div>
+      <div class="tab" data-tab="inspector">NWP Inspector</div>
+    </div>
+    <div id="tab-devices" class="tab-content active">
+      <div id="device-list"><div class="empty-state"><div class="icon">📡</div>Waiting for devices...</div></div>
+    </div>
+    <div id="tab-alerts" class="tab-content">
+      <div id="alert-list"><div class="empty-state"><div class="icon">✅</div>No alerts yet</div></div>
+    </div>
+    <div id="tab-inspector" class="tab-content">
+      <div id="inspector-content" class="inspector">
+        <div class="empty-state"><div class="icon">🔍</div>Click a device to inspect its last NWP packet</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+let devices = [];
+let alerts  = [];
+let selectedDevice = null;
+let simulation = null;
+let graphNodes = [], graphLinks = [];
+let prevBytes = {};
+
+// ============================================================
+// Tab switching
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ============================================================
+// API polling
+// ============================================================
+async function fetchDevices() {
+  try {
+    const r = await fetch('/api/devices');
+    devices = await r.json();
+  } catch(e) { /* collector not running — use demo data */ }
+}
+
+async function fetchAlerts() {
+  try {
+    const r = await fetch('/api/alerts');
+    alerts = await r.json();
+  } catch(e) {}
+}
+
+// ============================================================
+// Render device list
+// ============================================================
+function renderDevices() {
+  const el = document.getElementById('device-list');
+  if (!devices.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📡</div>Waiting for devices...</div>';
+    return;
+  }
+  el.innerHTML = devices.map(d => `
+    <div class="device-item ${selectedDevice === d.device_id ? 'selected' : ''}"
+         onclick="selectDevice(${d.device_id})">
+      <div class="device-name">
+        ${d.hostname || 'Node-' + d.device_id}
+        <span class="badge badge-${d.status}">${d.status}</span>
+        ${d.alert_flag ? '<span class="badge badge-alert">⚠ ALERT</span>' : ''}
+      </div>
+      <div class="device-ip">${d.ip} &nbsp;|&nbsp; ${d.mac}</div>
+      <div class="device-meta">Conns: ${d.active_conns} &nbsp;|&nbsp; Pkts: ${d.packet_count} &nbsp;|&nbsp; BW: ${fmtBytes(d.total_bytes)}</div>
+    </div>
+  `).join('');
+
+  // Stats
+  const online = devices.filter(d => d.status === 'online').length;
+  document.getElementById('stat-online').textContent = online;
+  document.getElementById('stat-total').textContent  = devices.length;
+
+  // Bandwidth delta
+  let totalBW = 0;
+  devices.forEach(d => {
+    const prev = prevBytes[d.device_id] || 0;
+    totalBW += Math.max(0, d.total_bytes - prev);
+    prevBytes[d.device_id] = d.total_bytes;
+  });
+  document.getElementById('stat-bw').textContent = (totalBW / 1e6).toFixed(1);
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alert-list');
+  document.getElementById('stat-alerts').textContent = alerts.length;
+  if (!alerts.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">✅</div>No alerts</div>';
+    return;
+  }
+  // Show newest first
+  el.innerHTML = [...alerts].reverse().slice(0, 50).map(a => `
+    <div class="alert-item sev-${a.severity}">
+      <div class="alert-rule">${severityIcon(a.severity)} ${a.rule.toUpperCase()}</div>
+      <div class="alert-detail">${a.detail}</div>
+      <div class="alert-meta">IP: ${a.ip} &nbsp;|&nbsp; Device: ${a.device_id} &nbsp;|&nbsp; ${fmtTime(a.ts)}</div>
+    </div>
+  `).join('');
+}
+
+function severityIcon(s) { return s === 3 ? '🔴' : s === 2 ? '🟡' : '🟢'; }
+
+// ============================================================
+// NWP Packet Inspector
+// ============================================================
+function selectDevice(id) {
+  selectedDevice = id;
+  const d = devices.find(x => x.device_id === id);
+  if (!d) return;
+
+  // Switch to inspector tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-tab="inspector"]').classList.add('active');
+  document.getElementById('tab-inspector').classList.add('active');
+
+  const ipHex = ipToHex(d.ip);
+  const macHex = d.mac.replace(/:/g, ' ');
+
+  const fields = [
+    ['0–1',  'Magic',        '4E 57',                        '"NW" — protocol identifier'],
+    ['2',    'Version',      '01',                           'NWP v1'],
+    ['3',    'Opcode',       '02',                           'STATUS heartbeat'],
+    ['4–5',  'Payload Len',  '00 00',                        'No payload on STATUS'],
+    ['6–9',  'Device ID',    hexU32(d.device_id),            'Unique device identifier'],
+    ['10–15','MAC Address',  macHex,                         'Hardware address'],
+    ['16–19','IP Address',   ipHex,                          d.ip],
+    ['20–21','Connections',  hexU16(d.active_conns),         d.active_conns + ' open sockets'],
+    ['22–25','Bytes Sent',   hexU32(d.bytes_sent),           fmtBytes(d.bytes_sent)],
+    ['26–29','Bytes Recv',   hexU32(d.bytes_recv),           fmtBytes(d.bytes_recv)],
+    ['30',   'Alert Flag',   d.alert_flag ? '01' : '00',     d.alert_flag ? '⚠ ANOMALY' : 'Normal'],
+    ['31',   'Checksum',     'XOR',                          'XOR of bytes 0–30'],
+  ];
+
+  const hexStr = '4E 57 01 02 00 00 ' +
+    hexU32(d.device_id) + ' ' + macHex + ' ' + ipHex + ' ' +
+    hexU16(d.active_conns) + ' ' + hexU32(d.bytes_sent) + ' ' +
+    hexU32(d.bytes_recv) + ' ' + (d.alert_flag ? '01' : '00') + ' XX';
+
+  document.getElementById('inspector-content').innerHTML = `
+    <h3>NWP Packet — ${d.hostname || 'Node-' + d.device_id}</h3>
+    ${fields.map(([bytes, name, val, desc]) => `
+      <div class="packet-field">
+        <span class="field-name">[${bytes}] ${name}</span>
+        <span>
+          <span class="field-value">${val}</span>
+          <span class="field-desc">${desc}</span>
+        </span>
+      </div>
+    `).join('')}
+    <div style="margin-top:12px; font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Raw Hex (32-byte header)</div>
+    <div class="packet-hex">${hexStr}</div>
+  `;
+
+  renderDevices(); // refresh selection highlight
+}
+
+// ============================================================
+// Force-directed graph
+// ============================================================
+function updateGraph() {
+  const svg = d3.select('#graph');
+  const W = document.getElementById('graph-container').clientWidth;
+  const H = document.getElementById('graph-container').clientHeight;
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+
+  if (!devices.length) { svg.selectAll('*').remove(); return; }
+
+  // Collector node always present
+  const nodeIds = new Set(devices.map(d => d.device_id));
+  const collectorId = 0;
+
+  // Build node list
+  const newNodes = [{ id: collectorId, label: 'Collector', type: 'collector' }];
+  devices.forEach(d => newNodes.push({
+    id: d.device_id, label: d.hostname || 'Node-' + d.device_id,
+    type: d.status, alert: d.alert_flag, bw: d.total_bytes
+  }));
+
+  // Links: every device -> collector
+  const newLinks = devices.map(d => ({ source: collectorId, target: d.device_id,
+                                        active: d.status === 'online', alert: d.alert_flag }));
+
+  // Merge with existing nodes to preserve positions
+  const existingPos = {};
+  graphNodes.forEach(n => existingPos[n.id] = { x: n.x, y: n.y });
+
+  graphNodes = newNodes.map(n => ({
+    ...n,
+    x: existingPos[n.id]?.x ?? W / 2 + (Math.random() - 0.5) * 200,
+    y: existingPos[n.id]?.y ?? H / 2 + (Math.random() - 0.5) * 200,
+    vx: 0, vy: 0
+  }));
+  graphLinks = newLinks;
+
+  if (simulation) simulation.stop();
+
+  simulation = d3.forceSimulation(graphNodes)
+    .force('link', d3.forceLink(graphLinks).id(d => d.id).distance(120))
+    .force('charge', d3.forceManyBody().strength(-300))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collision', d3.forceCollide(35))
+    .on('tick', ticked);
+
+  function ticked() {
+    svg.selectAll('*').remove();
+
+    // Links
+    svg.selectAll('.link').data(graphLinks).enter().append('line')
+      .attr('class', d => 'link' + (d.active ? ' active' : '') + (d.alert ? ' alert' : ''))
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+
+    // Nodes
+    const node = svg.selectAll('.node').data(graphNodes).enter().append('g')
+      .attr('class', 'node')
+      .attr('transform', d => `translate(${d.x},${d.y})`)
+      .call(d3.drag()
+        .on('start', (ev, d) => { if (!ev.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag',  (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+        .on('end',   (ev, d) => { if (!ev.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
+      )
+      .on('click', (ev, d) => { if (d.id !== collectorId) selectDevice(d.id); });
+
+    node.append('circle')
+      .attr('r', d => d.type === 'collector' ? 20 : 14)
+      .attr('fill', d => {
+        if (d.type === 'collector') return '#1a2a4a';
+        if (d.alert) return '#3a1a1a';
+        if (d.type === 'online') return '#1a3a2a';
+        return '#2a2020';
+      })
+      .attr('stroke', d => {
+        if (d.type === 'collector') return '#58a6ff';
+        if (d.alert) return '#f85149';
+        if (d.type === 'online') return '#3fb950';
+        return '#8b949e';
+      });
+
+    node.append('text')
+      .attr('dy', d => (d.type === 'collector' ? 20 : 14) + 12)
+      .attr('text-anchor', 'middle')
+      .text(d => d.label.length > 12 ? d.label.slice(0, 10) + '…' : d.label);
+
+    // Alert pulse ring
+    node.filter(d => d.alert).append('circle')
+      .attr('r', 18)
+      .attr('fill', 'none')
+      .attr('stroke', '#f85149')
+      .attr('stroke-width', 1.5)
+      .attr('opacity', 0.5);
+
+    // Collector icon
+    node.filter(d => d.type === 'collector').append('text')
+      .attr('text-anchor', 'middle').attr('dy', '0.35em')
+      .attr('font-size', '14px').attr('fill', '#58a6ff')
+      .text('⬡');
+  }
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function fmtBytes(b) {
+  if (b >= 1e9) return (b/1e9).toFixed(1) + ' GB';
+  if (b >= 1e6) return (b/1e6).toFixed(1) + ' MB';
+  if (b >= 1e3) return (b/1e3).toFixed(1) + ' KB';
+  return b + ' B';
+}
+function hexU32(v) { return ('00000000' + (v>>>0).toString(16).toUpperCase()).slice(-8).match(/../g).join(' '); }
+function hexU16(v) { return ('0000' + (v & 0xFFFF).toString(16).toUpperCase()).slice(-4).match(/../g).join(' '); }
+function ipToHex(ip) {
+  return ip.split('.').map(n => ('00' + parseInt(n).toString(16).toUpperCase()).slice(-2)).join(' ');
+}
+function fmtTime(ms) {
+  if (!ms) return 'just now';
+  return new Date(ms).toLocaleTimeString();
+}
+
+// ============================================================
+// Main loop
+// ============================================================
+async function tick() {
+  await fetchDevices();
+  await fetchAlerts();
+  renderDevices();
+  renderAlerts();
+  updateGraph();
+}
+
+tick();
+setInterval(tick, 2000);
+</script>
+</body>
+</html>
