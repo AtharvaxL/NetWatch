@@ -104,7 +104,7 @@ static void on_alert(const AlertEvent& ev) {
 }
 
 // ---------------------------------------------------------
-// Snapshot thread — writes devices.json every 2 seconds
+// Snapshot thread — writes devices.json every 2 seconds (atomic)
 // ---------------------------------------------------------
 static void snapshot_thread_fn() {
     while (g_running) {
@@ -115,8 +115,18 @@ static void snapshot_thread_fn() {
         #endif
         g_registry.expire_stale(STALE_TIMEOUT);
         std::string snap = g_registry.snapshot_json();
-        std::ofstream f("devices.json");
-        if (f.is_open()) f << snap;
+
+        // Atomic write: write to .tmp first, then rename.
+        // The dashboard will never read a partial file.
+        {
+            std::ofstream f("devices.tmp");
+            if (f.is_open()) {
+                f << snap;
+                f.close();
+                std::remove("devices.json");
+                std::rename("devices.tmp", "devices.json");
+            }
+        }
         log("INFO", "Snapshot written (" +
             std::to_string(g_registry.online_count()) + " online, " +
             std::to_string(g_registry.total_count()) + " total)");
