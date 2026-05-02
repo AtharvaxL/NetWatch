@@ -1,21 +1,21 @@
 /*
  * NetWatch Agent
- * Runs on each monitored node. Sends NWP packets to the collector.
+ * Runs on a monitored host. Reads real network I/O statistics from the OS
+ * and reports them to the collector via NWP over UDP.
  *
- * Behaviour:
- *   1. On startup: sends HELLO with hostname
- *   2. Every STATUS_INTERVAL seconds: sends STATUS with traffic stats
- *   3. On Ctrl+C: sends GOODBYE and exits cleanly
+ * Metrics reported (real, not simulated):
+ *   - bytes_sent / bytes_recv : delta since last interval (all non-loopback ifaces)
+ *   - active_conns            : number of ESTABLISHED TCP connections
  *
  * Build (Windows, MinGW):
- *   g++ -std=c++17 -I../include agent.cpp -o agent.exe -lws2_32 -liphlpapi
+ *   g++ -std=c++17 -I. agent.cpp -o agent.exe -lws2_32 -liphlpapi
  *
- * Build (Linux/CI):
- *   g++ -std=c++17 -I../include agent.cpp -o agent -lpthread
+ * Build (Linux):
+ *   g++ -std=c++17 -I. agent.cpp -o agent -lpthread
  *
  * Usage:
- *   agent.exe <collector_ip> [collector_port] [device_id]
- *   e.g.  agent.exe 192.168.1.1 9000 1001
+ *   agent.exe [collector_ip] [collector_port] [device_id]
+ *   e.g.  agent.exe 192.168.1.100 9000 1001
  */
 
 #ifdef _WIN32
@@ -46,17 +46,19 @@
 #include <atomic>
 #ifndef _WIN32
 #include <thread>
+#include <fstream>
 #endif
 #include <chrono>
 #include <iostream>
 #include <string>
-#include <random>
+#include <vector>
 #include <sstream>
 
 // ---------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------
-constexpr int STATUS_INTERVAL = 5;    // seconds between STATUS packets
+constexpr int STATUS_INTERVAL  = 5;  // seconds between STATUS packets
+constexpr int MAX_SEND_RETRIES = 3;  // UDP send retries on transient failure
 
 static std::atomic<bool> g_running{true};
 
@@ -98,9 +100,9 @@ static uint32_t get_local_ip() {
 #endif
 }
 
-// Generate a pseudo-MAC from device_id (deterministic, safe for demo)
+// MAC derived from device_id (locally-administered, deterministic)
 static void make_mac(uint32_t device_id, uint8_t mac[6]) {
-    mac[0] = 0x02; // locally administered
+    mac[0] = 0x02;
     mac[1] = 0x00;
     mac[2] = (device_id >> 24) & 0xFF;
     mac[3] = (device_id >> 16) & 0xFF;
@@ -108,34 +110,74 @@ static void make_mac(uint32_t device_id, uint8_t mac[6]) {
     mac[5] =  device_id        & 0xFF;
 }
 
-// Simulate traffic counters (increases each interval)
-struct TrafficSim {
-    std::mt19937 rng;
-    uint32_t total_sent = 0;
-    uint32_t total_recv = 0;
-    uint16_t conns      = 3;
-    bool     attack_mode = false;
+// ---------------------------------------------------------
+// Real network statistics — reads actual OS counters
+// ---------------------------------------------------------
+struct NetStats {
+    uint64_t bytes_sent = 0;
+    uint64_t bytes_recv = 0;
+    uint32_t tcp_conns  = 0;
+};
 
-    TrafficSim() : rng(std::random_device{}()) {}
-
-    void tick() {
-        if (attack_mode) {
-            // Flood mode: very high bandwidth
-            std::uniform_int_distribution<uint32_t> d(5'000'000, 20'000'000);
-            total_sent += d(rng);
-            total_recv += d(rng) / 2;
-            std::uniform_int_distribution<uint16_t> cd(300, 800);
-            conns = cd(rng);
-        } else {
-            // Normal mode
-            std::uniform_int_distribution<uint32_t> d(1'000, 100'000);
-            total_sent += d(rng);
-            total_recv += d(rng);
-            std::uniform_int_distribution<uint16_t> cd(1, 20);
-            conns = cd(rng);
+static NetStats read_net_stats() {
+    NetStats s{};
+#ifdef _WIN32
+    // Byte totals across all non-loopback interfaces
+    DWORD needed = 0;
+    GetIfTable(nullptr, &needed, FALSE);
+    std::vector<BYTE> ifBuf(needed);
+    auto* pIf = reinterpret_cast<MIB_IFTABLE*>(ifBuf.data());
+    if (GetIfTable(pIf, &needed, FALSE) == 0) {
+        for (DWORD i = 0; i < pIf->dwNumEntries; ++i) {
+            if (pIf->table[i].dwType == MIB_IF_TYPE_LOOPBACK) continue;
+            s.bytes_sent += pIf->table[i].dwOutOctets;
+            s.bytes_recv += pIf->table[i].dwInOctets;
         }
     }
-};
+    // Count only ESTABLISHED TCP connections
+    needed = 0;
+    GetExtendedTcpTable(nullptr, &needed, FALSE, AF_INET,
+                        TCP_TABLE_OWNER_PID_ALL, 0);
+    std::vector<BYTE> tcpBuf(needed);
+    auto* pTcp = reinterpret_cast<MIB_TCPTABLE_OWNER_PID*>(tcpBuf.data());
+    if (GetExtendedTcpTable(pTcp, &needed, FALSE, AF_INET,
+                            TCP_TABLE_OWNER_PID_ALL, 0) == 0) {
+        for (DWORD i = 0; i < pTcp->dwNumEntries; ++i)
+            if (pTcp->table[i].dwState == MIB_TCP_STATE_ESTAB) ++s.tcp_conns;
+    }
+#else
+    // Linux: /proc/net/dev for byte counts
+    {
+        std::ifstream f("/proc/net/dev");
+        std::string line;
+        std::getline(f, line); std::getline(f, line); // skip 2 header lines
+        while (std::getline(f, line)) {
+            auto colon = line.find(':');
+            if (colon == std::string::npos) continue;
+            std::string iface = line.substr(0, colon);
+            if (iface.find("lo") != std::string::npos) continue;
+            std::istringstream iss(line.substr(colon + 1));
+            uint64_t rb, rp, re, rd, rf, rc, rff, rm, sb;
+            iss >> rb >> rp >> re >> rd >> rf >> rc >> rff >> rm >> sb;
+            s.bytes_recv += rb;
+            s.bytes_sent += sb;
+        }
+    }
+    // Linux: /proc/net/tcp — count state 01 (ESTABLISHED)
+    {
+        std::ifstream f("/proc/net/tcp");
+        std::string line;
+        std::getline(f, line); // skip header
+        while (std::getline(f, line)) {
+            std::istringstream iss(line);
+            std::string sl, local, remote, state;
+            iss >> sl >> local >> remote >> state;
+            if (state == "01") ++s.tcp_conns;
+        }
+    }
+#endif
+    return s;
+}
 
 static void handle_signal(int) { g_running = false; }
 
@@ -144,10 +186,19 @@ static void handle_signal(int) { g_running = false; }
 // ---------------------------------------------------------
 static bool send_packet(SOCKET sock, sockaddr_in& dest, NWPPacket& pkt) {
     auto buf = NWPCodec::encode(pkt);
-    int n = sendto(sock, reinterpret_cast<const char*>(buf.data()),
-                   static_cast<int>(buf.size()), 0,
-                   reinterpret_cast<sockaddr*>(&dest), sizeof(dest));
-    return n != SOCKET_ERROR;
+    for (int attempt = 0; attempt < MAX_SEND_RETRIES; ++attempt) {
+        int n = sendto(sock, reinterpret_cast<const char*>(buf.data()),
+                       static_cast<int>(buf.size()), 0,
+                       reinterpret_cast<sockaddr*>(&dest), sizeof(dest));
+        if (n != SOCKET_ERROR) return true;
+#ifdef _WIN32
+        Sleep(100);
+#else
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#endif
+    }
+    std::cerr << "[Agent] WARNING: send failed after " << MAX_SEND_RETRIES << " attempts\n";
+    return false;
 }
 
 // ---------------------------------------------------------
@@ -195,8 +246,8 @@ int main(int argc, char* argv[]) {
     if (send_packet(sock, dest, hello))
         std::cout << "[Agent] Sent HELLO\n";
 
-    TrafficSim sim;
-    int tick = 0;
+    // Baseline reading — we report deltas, not cumulative totals
+    NetStats prev = read_net_stats();
 
     while (g_running) {
         #ifdef _WIN32
@@ -206,36 +257,22 @@ int main(int argc, char* argv[]) {
         #endif
         if (!g_running) break;
 
-        sim.tick();
-        tick++;
+        NetStats cur = read_net_stats();
 
-        // Simulate attack burst every 30 ticks for demo purposes
-        if (tick % 30 == 0) {
-            sim.attack_mode = true;
-            std::cout << "[Agent] >>> ATTACK MODE ON <<<\n";
-        } else if (tick % 30 == 5) {
-            sim.attack_mode = false;
-            std::cout << "[Agent] Attack mode off\n";
-        }
+        // Delta bytes over this interval (handles counter wrap gracefully)
+        uint32_t sent_delta = static_cast<uint32_t>(cur.bytes_sent - prev.bytes_sent);
+        uint32_t recv_delta = static_cast<uint32_t>(cur.bytes_recv - prev.bytes_recv);
+        uint16_t conns      = static_cast<uint16_t>(
+                                  std::min(cur.tcp_conns, (uint32_t)65535));
+        prev = cur;
 
-        bool alert = sim.attack_mode;
         auto status = NWPCodec::make_status(
-            device_id, mac, ip,
-            sim.conns, sim.total_sent, sim.total_recv, alert);
+            device_id, mac, ip, conns, sent_delta, recv_delta, false);
 
         if (send_packet(sock, dest, status)) {
-            std::cout << "[Agent] Sent STATUS "
-                      << "conns=" << sim.conns
-                      << " bw=" << (sim.total_sent + sim.total_recv)
-                      << (alert ? " [ALERT]" : "") << "\n";
-        }
-
-        // Optionally send ALERT packet separately in attack mode
-        if (alert) {
-            auto apkt = NWPCodec::make_alert(device_id, mac, ip,
-                        AlertSeverity::HIGH, "Packet flood detected");
-            send_packet(sock, dest, apkt);
-            std::cout << "[Agent] Sent ALERT packet\n";
+            std::cout << "[Agent] STATUS sent="
+                      << sent_delta << "B recv=" << recv_delta
+                      << "B conns=" << conns << "\n";
         }
     }
 

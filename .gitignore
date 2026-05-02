@@ -1,0 +1,16 @@
+# Build output
+bin/
+*.exe
+*.o
+*.obj
+
+# Runtime-generated data files
+devices.json
+devices.tmp
+alerts.json
+
+# Editor / OS
+.vscode/
+*.user
+Thumbs.db
+.DS_Store

@@ -95,6 +95,7 @@ static std::string http_response(int code, const std::string& ctype,
       << "Content-Type: " << ctype << "\r\n"
       << "Content-Length: " << body.size() << "\r\n"
       << "Access-Control-Allow-Origin: *\r\n"
+      << "Cache-Control: no-cache, no-store\r\n"
       << "Connection: close\r\n"
       << "\r\n"
       << body;
@@ -123,8 +124,8 @@ static void handle_client(SOCKET client) {
     std::string response;
 
     if (path == "/" || path == "/index.html") {
-        std::string html = read_file("dashboard/index.html");
-        if (html.empty()) html = "<h1>NetWatch</h1><p>dashboard/index.html not found</p>";
+        std::string html = read_file("index.html");
+        if (html.empty()) html = "<h1>NetWatch</h1><p>index.html not found. Run from project root.</p>";
         response = http_response(200, "text/html; charset=utf-8", html);
 
     } else if (path == "/api/devices") {
