@@ -27,6 +27,7 @@
 #include <vector>
 #include <sstream>
 #include <iomanip>
+#include <arpa/inet.h>
 
 // ---------------------------------------------------------
 // Constants
