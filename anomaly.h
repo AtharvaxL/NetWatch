@@ -19,6 +19,15 @@ using Clock     = std::chrono::steady_clock;
 using TimePoint = std::chrono::time_point<Clock>;
 
 // ---------------------------------------------------------
+// Detection thresholds (tune these per environment)
+// ---------------------------------------------------------
+constexpr double BW_SPIKE_ZSCORE_THRESHOLD   = 3.5;  // z-score for bandwidth spike
+constexpr double CONN_STORM_ZSCORE_THRESHOLD = 3.0;  // z-score for connection storm
+constexpr double BW_ABSOLUTE_THRESHOLD_MB    = 10.0; // MB per interval — absolute cap
+constexpr int    CONN_ABSOLUTE_THRESHOLD     = 200;  // max simultaneous connections
+constexpr int    ANOMALY_COOLDOWN_SECS       = 10;   // min seconds between same-rule alerts
+
+// ---------------------------------------------------------
 // Alert event
 // ---------------------------------------------------------
 struct AlertEvent {
@@ -116,6 +125,9 @@ public:
 
         if (warm) {
             // Rule 1 — Bandwidth spike (z-score > 3.5)
+            // Z-score: (value - mean) / stddev
+            // A z-score > 3 means the value is 3 standard deviations above average —
+            // statistically, this occurs by chance only ~0.13% of the time.
             double bw_z = stats.zscore(total_bw, stats.bw_window, stats.bw_sum);
             if (bw_z > 3.5 && !in_cooldown(device_id, "bw_spike")) {
                 fire(device_id, ip, "bw_spike",
