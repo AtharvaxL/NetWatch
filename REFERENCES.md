@@ -59,10 +59,10 @@ All external sources used in the design and implementation of NetWatch.
 - **MinGW-w64** — GCC port for Windows, used to compile C++17 code
   https://www.mingw-w64.org
 
-- **g++ 13 (GCC)** — C++ compiler
+- **g++ (MinGW GCC)** — C++ compiler (version 6.3.0+)
   https://gcc.gnu.org
 
 ---
 
-*All code in this repository was written by the team. No code was copied from
-external sources. Libraries are used via their public APIs only.*
+*All C++ code in this repository was written by the team. No code was copied from
+external sources. Libraries (D3.js, Winsock2) are used via their public APIs only.*
