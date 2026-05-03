@@ -96,6 +96,7 @@ static std::string http_response(int code, const std::string& ctype,
       << "Content-Length: " << body.size() << "\r\n"
       << "Access-Control-Allow-Origin: *\r\n"
       << "Cache-Control: no-cache, no-store\r\n"
+      << "X-Content-Type-Options: nosniff\r\n"
       << "Connection: close\r\n"
       << "\r\n"
       << body;
