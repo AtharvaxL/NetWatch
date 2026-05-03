@@ -216,6 +216,17 @@ Cooldown of 10 seconds per rule per device prevents alert flooding.
 
 ---
 
+## Quick Demo
+
+The fastest way to see everything working:
+
+\\\cmd
+double-click start.bat
+# Open http://localhost:8080 in your browser
+# The simulator creates 6 virtual nodes immediately
+\\\`n
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
