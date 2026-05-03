@@ -79,6 +79,7 @@ struct DeviceRecord {
     }
 };
 
+// Thread-safe store of all monitored devices, keyed by device_id.
 class DeviceRegistry {
 public:
     // Update or insert a device from a parsed NWP packet
