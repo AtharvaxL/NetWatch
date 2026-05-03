@@ -216,6 +216,19 @@ Cooldown of 10 seconds per rule per device prevents alert flooding.
 
 ---
 
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Dashboard shows "Waiting for devices..." | Make sure `collector.exe` is running first, then `agent.exe` or `simulator.exe` |
+| `agent.exe` shows "send failed" | Collector is not running or firewall is blocking UDP port 9000 |
+| No graph appears in browser | Hard-reload the page (Ctrl+Shift+R). Check browser console for errors |
+| Port 8080 already in use | Another process is using 8080 — close it or edit `dashboard_server.cpp` to change the port |
+| Port 9000 already in use | Edit `collector.cpp` line with `COLLECTOR_PORT` and rebuild |
+| Devices go offline after 30s | Normal — agent must be running continuously. Restart `agent.exe` |
+
+---
+
 ## Contributing
 
 See `COMMIT_PLAN.md` for the branching strategy and commit message conventions used in this project.
