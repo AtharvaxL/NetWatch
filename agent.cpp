@@ -208,6 +208,15 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT,  handle_signal);
     std::signal(SIGTERM, handle_signal);
 
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "Usage: agent.exe [collector_ip] [port] [device_id]\n"
+                  << "  collector_ip : IP address of the collector (default: 127.0.0.1)\n"
+                  << "  port         : UDP port of the collector   (default: 9000)\n"
+                  << "  device_id    : unique integer ID for this node (default: 1001)\n"
+                  << "Example: agent.exe 192.168.1.100 9000 2001\n";
+        return 0;
+    }
+
     std::string collector_ip   = argc > 1 ? argv[1] : "127.0.0.1";
     uint16_t    collector_port = argc > 2 ? static_cast<uint16_t>(std::stoi(argv[2])) : 9000;
     uint32_t    device_id      = argc > 3 ? static_cast<uint32_t>(std::stoi(argv[3])) : 1001;
