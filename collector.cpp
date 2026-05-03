@@ -52,6 +52,7 @@ constexpr uint16_t COLLECTOR_PORT   = 9000;
 constexpr int      RECV_TIMEOUT_MS  = 1000;
 constexpr int      EXPIRE_INTERVAL  = 5;    // seconds between stale-check
 constexpr int      STALE_TIMEOUT    = 30;   // seconds before marking offline
+constexpr char     COLLECTOR_VERSION[] = "1.0.0";
 
 // ---------------------------------------------------------
 // Globals (shared between threads)
