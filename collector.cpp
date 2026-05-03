@@ -161,8 +161,13 @@ int main(int argc, char* argv[]) {
     { std::ofstream f("devices.json"); f << "[]"; }
     { std::ofstream f("alerts.json");  }
 
-    log("INFO", "NetWatch Collector starting on UDP port " +
-        std::to_string(COLLECTOR_PORT));
+    log("INFO", "==============================================");
+    log("INFO", "  NetWatch Collector v1.0");
+    log("INFO", "  UDP port : " + std::to_string(COLLECTOR_PORT));
+    log("INFO", "  Snapshot : devices.json (every 2s)");
+    log("INFO", "  Alerts   : alerts.json (on event)");
+    log("INFO", "==============================================");
+    log("INFO", "Waiting for NWP agents...");
 
 #ifdef _WIN32
     WSADATA wsa{};

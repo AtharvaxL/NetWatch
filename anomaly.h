@@ -111,6 +111,7 @@ public:
         double total_bw = static_cast<double>(bytes_sent + bytes_recv);
 
         // Need at least WINDOW_SIZE/2 samples before firing
+        // (allows the engine to establish a per-device baseline first)
         bool warm = stats.bw_window.size() >= DeviceStats::WINDOW_SIZE / 2;
 
         if (warm) {
@@ -132,16 +133,16 @@ public:
                 set_cooldown(device_id, "conn_storm");
             }
 
-            // Rule 3 — Absolute bandwidth threshold (>50MB/interval)
-            if (total_bw > 50'000'000 && !in_cooldown(device_id, "bw_absolute")) {
+            // Rule 3 — Absolute bandwidth threshold (> 10MB per 5-second interval)
+            if (total_bw > 10'000'000 && !in_cooldown(device_id, "bw_absolute")) {
                 fire(device_id, ip, "bw_absolute",
                      "Extreme bandwidth: " + fmt(total_bw / 1e6) + " MB/interval",
                      total_bw / 1e6, 3);
                 set_cooldown(device_id, "bw_absolute");
             }
 
-            // Rule 4 — Connection count absolute threshold (>500)
-            if (active_conns > 500 && !in_cooldown(device_id, "conn_absolute")) {
+            // Rule 4 — Connection count absolute threshold (> 200)
+            if (active_conns > 200 && !in_cooldown(device_id, "conn_absolute")) {
                 fire(device_id, ip, "conn_absolute",
                      "Extreme connection count: " + std::to_string(active_conns),
                      active_conns, 3);
