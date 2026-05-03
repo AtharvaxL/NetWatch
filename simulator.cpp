@@ -174,6 +174,15 @@ int main(int argc, char* argv[]) {
     std::signal(SIGINT,  handle_signal);
     std::signal(SIGTERM, handle_signal);
 
+    if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+        std::cout << "Usage: simulator.exe [num_nodes] [collector_ip] [scenario]\n"
+                  << "  num_nodes    : number of virtual devices (default: 6)\n"
+                  << "  collector_ip : IP of the collector (default: 127.0.0.1)\n"
+                  << "  scenario     : normal | attack | churn (default: attack)\n"
+                  << "Example: simulator.exe 4 192.168.1.10 normal\n";
+        return 0;
+    }
+
     int         num_nodes     = argc > 1 ? std::stoi(argv[1]) : 6;
     std::string collector_ip  = argc > 2 ? argv[2] : "127.0.0.1";
     std::string scenario      = argc > 3 ? argv[3] : "attack";
