@@ -119,9 +119,8 @@ public:
         auto& stats = device_stats_[device_id];
         double total_bw = static_cast<double>(bytes_sent + bytes_recv);
 
-        // Need at least WINDOW_SIZE/2 samples before firing
-        // (allows the engine to establish a per-device baseline first)
-        // Warmup: need enough samples to establish baseline before firing alerts\n        bool warm = stats.bw_window.size() >= DeviceStats::WINDOW_SIZE / 2;
+        // Warmup: need enough samples to establish baseline before firing alerts
+        bool warm = stats.bw_window.size() >= DeviceStats::WINDOW_SIZE / 2;
 
         if (warm) {
             // Rule 1 — Bandwidth spike (z-score > 3.5)
