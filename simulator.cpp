@@ -219,7 +219,7 @@ int main(int argc, char* argv[]) {
 #endif
     }
 
-    std::cout << "[SIM] All nodes running. Ctrl+C to stop.\n";
+    std::cout << "[SIM] All nodes running. Ctrl+C to stop and send GOODBYE packets.\n";
 
 #ifdef _WIN32
     if (!threads.empty()) {
