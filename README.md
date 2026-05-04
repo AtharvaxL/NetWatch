@@ -16,51 +16,160 @@ NetWatch gives you a live browser map of every device on your network:
 
 ---
 
-## Quick Start
+## Running on Windows
 
-### Windows (MinGW)
+### Prerequisites
+- MinGW-w64 with g++ (C++17 support) — download from https://www.mingw-w64.org/
+- Verify with: `mingw32-make --version` and `g++ --version`
 
-```
-# 1. Build all binaries (requires MinGW g++ with C++17 support)
+### Step 1 — Clone and Build
+
+```cmd
+git clone https://github.com/AtharvaxL/NetWatch.git
+cd NetWatch
 mingw32-make all
+```
 
-# 2. Run unit tests (24 tests — all must pass before deploying)
+Expected output:
+```
+[OK] collector
+[OK] agent
+[OK] dashboard
+[OK] simulator
+[OK] tests
+=== Build complete ===
+```
+
+### Step 2 — Run Unit Tests (optional but recommended)
+
+```cmd
 mingw32-make test
+```
 
-# 3. Launch the full stack (collector + dashboard)
+All 24 tests must pass before deploying.
+
+### Step 3 — Start the Stack
+
+**Option A — One click (easiest):**
+```cmd
 start.bat
 ```
+This opens collector and dashboard in separate windows and launches the browser automatically.
 
-`start.bat` opens two windows (collector and dashboard server) and then opens the dashboard in your browser at **http://localhost:8080**.
+**Option B — Manual (three separate terminals):**
 
-### Linux / macOS
+```cmd
+REM Terminal 1 — Start the collector
+bin\collector.exe
+
+REM Terminal 2 — Start the dashboard server
+bin\dashboard.exe
+
+REM Terminal 3 — Open browser
+start http://localhost:8080
+```
+
+### Step 4 — Connect Devices
+
+**Using the simulator (virtual nodes for demo/testing):**
+```cmd
+REM In a new terminal
+bin\simulator.exe 4 127.0.0.1 attack
+```
+This spawns 4 virtual devices sending NWP packets. You will see them appear on the graph within 5 seconds.
+
+Scenarios:
+- `normal`  — steady low traffic
+- `attack`  — periodic flood bursts (triggers anomaly alerts)
+- `churn`   — devices randomly joining and leaving
+
+**Using a real agent (monitors this machine's actual traffic):**
+```cmd
+bin\agent.exe 127.0.0.1
+```
+
+**Using a real agent on another machine on your LAN:**
+```cmd
+REM On the other machine — copy agent.exe to it, then run:
+agent.exe 192.168.1.X    <-- replace with your collector machine's IP
+```
+
+### Step 5 — View the Dashboard
+
+Open **http://localhost:8080** in your browser.
+
+- **Graph** — live topology of all connected devices
+- **Devices tab** — IP, MAC, connections, bytes, online/offline status
+- **Alerts tab** — anomaly events with severity and timestamp
+- **NWP Inspector** — click any node to see its raw packet byte layout
+
+---
+
+## Running on Linux / macOS
+
+### Prerequisites
 
 ```bash
+# Ubuntu / Debian
+sudo apt install g++ make
+
+# macOS (with Homebrew)
+brew install gcc make
+```
+
+Verify: `g++ --version` (must be 11+)
+
+### Step 1 — Clone and Build
+
+```bash
+git clone https://github.com/AtharvaxL/NetWatch.git
+cd NetWatch
 make all
+```
+
+### Step 2 — Run Unit Tests (optional but recommended)
+
+```bash
 make test
+```
+
+### Step 3 — Start the Stack
+
+```bash
+# Terminal 1 — Collector (listens on UDP port 9000)
+./bin/collector
+
+# Terminal 2 — Dashboard server (HTTP on port 8080)
+./bin/dashboard
+
+# Or use the combined target (starts both):
 make run
 ```
 
-### Manual Start (any platform)
+### Step 4 — Connect Devices
 
-Open three separate terminals:
-
+**Simulator (virtual nodes):**
+```bash
+# Terminal 3
+./bin/simulator 4 127.0.0.1 attack
 ```
-# Terminal 1 — Collector (receives NWP packets on UDP port 9000)
-bin/collector.exe
 
-# Terminal 2 — Dashboard (HTTP server on port 8080)
-bin/dashboard.exe
+Scenarios: `normal` | `attack` | `churn`
 
-# Terminal 3 — Connect a device agent
-bin/agent.exe <collector_ip>
-# e.g.  bin/agent.exe 192.168.1.100
-
-# Or run the simulator for testing
-bin/simulator.exe 4 127.0.0.1
-
-# Open http://localhost:8080 in your browser
+**Real agent (monitors this machine):**
+```bash
+./bin/agent 127.0.0.1
 ```
+
+**Real agent on another machine:**
+```bash
+# Copy the agent binary to the other machine, then:
+./agent 192.168.1.X    # replace with collector machine's IP
+```
+
+### Step 5 — View the Dashboard
+
+Open **http://localhost:8080** in your browser.
 
 ---
 
@@ -92,29 +201,29 @@ All multi-byte integers are **big-endian (network byte order)**.
 
 ### Opcodes
 
-| Opcode | Name    | Payload                                | Description                           |
-|--------|---------|----------------------------------------|---------------------------------------|
-| 0x01   | HELLO   | hostname string (UTF-8)                | Agent first contact — register device |
-| 0x02   | STATUS  | (none)                                 | Periodic heartbeat with traffic stats |
-| 0x03   | ALERT   | `[severity byte]` + reason string      | Node-detected anomaly                 |
-| 0x04   | GOODBYE | (none)                                 | Graceful disconnect                   |
-| 0x05   | ACK     | (none)                                 | Collector acknowledgement             |
+| Opcode | Name    | Payload                           | Description                           |
+|--------|---------|-----------------------------------|---------------------------------------|
+| 0x01   | HELLO   | hostname string (UTF-8)           | Agent first contact — register device |
+| 0x02   | STATUS  | (none)                            | Periodic heartbeat with traffic stats |
+| 0x03   | ALERT   | `[severity byte]` + reason string | Node-detected anomaly                 |
+| 0x04   | GOODBYE | (none)                            | Graceful disconnect                   |
+| 0x05   | ACK     | (none)                            | Collector acknowledgement             |
 
 ### Example STATUS Packet (hex dump)
 
 ```
-4E 57  — Magic "NW"
-01     — Version 1
-02     — Opcode: STATUS
-00 00  — Payload length: 0
+4E 57        — Magic "NW"
+01           — Version 1
+02           — Opcode: STATUS
+00 00        — Payload length: 0
 00 00 03 E9  — Device ID: 1001
 02 00 03 E9 1C 71  — MAC address
 C0 A8 01 01  — IP: 192.168.1.1
-00 0F  — Active connections: 15
+00 0F        — Active connections: 15
 00 01 E2 40  — Bytes sent: 123456
 00 09 FB F1  — Bytes received: 654321
-00     — Alert flag: normal
-A5     — XOR checksum
+00           — Alert flag: normal
+A5           — XOR checksum
 ```
 
 ---
@@ -139,7 +248,7 @@ A5     — XOR checksum
 │  • Parses NWP binary headers and payloads                   │
 │  • Maintains live DeviceRegistry (thread-safe)              │
 │  • Runs AnomalyEngine per device (z-score + thresholds)     │
-│  • Writes devices.json every 2 seconds                      │
+│  • Writes devices.json every 2 seconds (atomic)             │
 │  • Appends to alerts.json on each alert event               │
 └──────────────────────┬──────────────────────────────────────┘
                        │ File I/O (JSON)
@@ -164,19 +273,19 @@ A5     — XOR checksum
 
 ```
 netwatch/
-├── nwp.h               — NWP protocol: packet struct, codec, all opcodes
-├── anomaly.h           — Anomaly detection engine (z-score + thresholds)
-├── registry.h          — Thread-safe device registry + JSON serialiser
-├── collector.cpp       — UDP listener, parses NWP, runs anomaly engine
-├── agent.cpp           — NWP agent: HELLO + STATUS + GOODBYE lifecycle
-├── dashboard_server.cpp— HTTP server for browser dashboard
-├── simulator.cpp       — Multi-threaded virtual device fleet (for testing)
-├── index.html          — Browser UI: D3 topology graph + alerts + inspector
-├── test_netwatch.cpp   — 24 unit tests (NWP protocol + anomaly + registry)
-├── Makefile            — Build system (Windows MinGW + Linux)
-├── start.bat           — Windows one-click launcher
-├── REFERENCES.md       — External sources and attribution
-└── README.md           — This file
+├── nwp.h                — NWP protocol: packet struct, codec, all opcodes
+├── anomaly.h            — Anomaly detection engine (z-score + thresholds)
+├── registry.h           — Thread-safe device registry + JSON serialiser
+├── collector.cpp        — UDP listener, parses NWP, runs anomaly engine
+├── agent.cpp            — NWP agent: HELLO + STATUS + GOODBYE lifecycle
+├── dashboard_server.cpp — HTTP server for browser dashboard
+├── simulator.cpp        — Multi-threaded virtual device fleet (for testing)
+├── index.html           — Browser UI: D3 topology graph + alerts + inspector
+├── test_netwatch.cpp    — 24 unit tests (NWP protocol + anomaly + registry)
+├── Makefile             — Build system (Windows MinGW + Linux)
+├── start.bat            — Windows one-click launcher
+├── REFERENCES.md        — External sources and attribution
+└── README.md            — This file
 ```
 
 ---
@@ -185,61 +294,26 @@ netwatch/
 
 The engine maintains a 20-sample sliding window per device and fires alerts when:
 
-| Rule            | Trigger                                            | Severity |
-|-----------------|----------------------------------------------------|----------|
-| `bw_spike`      | Bandwidth z-score > 3.5 (statistical outlier)     | Medium   |
-| `bw_absolute`   | Total bytes > 50 MB in one interval                | High     |
-| `conn_storm`    | Connection count z-score > 3.0                    | Medium   |
-| `conn_absolute` | Active connections > 500                           | High     |
-| `agent_alert`   | Agent self-reported alert flag set                 | Medium   |
+| Rule            | Trigger                                         | Severity |
+|-----------------|-------------------------------------------------|----------|
+| `bw_spike`      | Bandwidth z-score > 3.5 (statistical outlier)  | Medium   |
+| `bw_absolute`   | Total bytes > 50 MB in one interval             | High     |
+| `conn_storm`    | Connection count z-score > 3.0                 | Medium   |
+| `conn_absolute` | Active connections > 500                        | High     |
+| `agent_alert`   | Agent self-reported alert flag set              | Medium   |
 
 Cooldown of 10 seconds per rule per device prevents alert flooding.
 
----
-
-## Building from Source
-
-### Requirements
-
-- **Windows**: MinGW-w64 with g++ supporting C++17 (`mingw32-make --version`)
-- **Linux/macOS**: g++ 11+ with pthreads
-- No external libraries required
-
-### Build Targets
-
-| Command                 | Description                         |
-|-------------------------|-------------------------------------|
-| `mingw32-make all`      | Build all five binaries             |
-| `mingw32-make test`     | Run the 24-test unit suite          |
-| `mingw32-make clean`    | Remove `bin/` and generated JSON    |
-| `mingw32-make help`     | Show all targets                    |
-
----
-
-## Quick Demo
-
-The fastest way to see everything working:
-
-\\\cmd
-double-click start.bat
-# Open http://localhost:8080 in your browser
-# The simulator creates 6 virtual nodes immediately
-\\\`n
 ---
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| Dashboard shows "Waiting for devices..." | Make sure `collector.exe` is running first, then `agent.exe` or `simulator.exe` |
+| Dashboard shows "Waiting for agents to connect..." | Make sure `collector.exe` is running first, then run `agent.exe` or `simulator.exe` |
 | `agent.exe` shows "send failed" | Collector is not running or firewall is blocking UDP port 9000 |
 | No graph appears in browser | Hard-reload the page (Ctrl+Shift+R). Check browser console for errors |
-| Port 8080 already in use | Another process is using 8080 — close it or edit `dashboard_server.cpp` to change the port |
-| Port 9000 already in use | Edit `collector.cpp` line with `COLLECTOR_PORT` and rebuild |
+| Port 8080 already in use | Another process is using 8080 — close it or change the port in `dashboard_server.cpp` |
+| Port 9000 already in use | Edit `COLLECTOR_PORT` in `collector.cpp` and rebuild |
 | Devices go offline after 30s | Normal — agent must be running continuously. Restart `agent.exe` |
-
----
-
-## Contributing
-
-See `COMMIT_PLAN.md` for the branching strategy and commit message conventions used in this project.
+| Windows firewall blocks agents | Run: `netsh advfirewall firewall add rule name="NetWatch" protocol=UDP dir=in localport=9000 action=allow` |
