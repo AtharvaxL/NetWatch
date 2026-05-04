@@ -36,6 +36,9 @@ constexpr uint16_t NWP_MAGIC   = 0x4E57;  // "NW"
 constexpr uint8_t  NWP_VERSION = 0x01;
 constexpr size_t   NWP_HEADER_SIZE = 32;
 
+// Checksum algorithm: XOR of all bytes 0..30 stored in byte 31.
+// Detects single-bit corruption; simple and fast for embedded nodes.
+
 // Opcodes
 enum class NWPOpcode : uint8_t {
     HELLO     = 0x01,  // Agent first contact
