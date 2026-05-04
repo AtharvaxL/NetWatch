@@ -87,9 +87,9 @@ run: all stop
 	@echo "Or simulator:    ./bin/simulator 4 127.0.0.1"
 
 stop:
-	@pkill -f bin/collector 2>/dev/null || true
-	@pkill -f bin/dashboard 2>/dev/null || true
-	@pkill -f bin/simulator 2>/dev/null || true
+	@pkill -x collector 2>/dev/null || true
+	@pkill -x dashboard 2>/dev/null || true
+	@pkill -x simulator 2>/dev/null || true
 	@sleep 1
 
 clean:
