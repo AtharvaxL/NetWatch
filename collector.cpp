@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
     { std::ofstream f("alerts.json");  }
 
     log("INFO", "==============================================");
-    log("INFO", "  NetWatch Collector v' + COLLECTOR_VERSION +");
+    log("INFO", std::string("  NetWatch Collector v") + COLLECTOR_VERSION);
     log("INFO", "  UDP port : " + std::to_string(COLLECTOR_PORT));
     log("INFO", "  Snapshot : devices.json (every 2s)");
     log("INFO", "  Alerts   : alerts.json (on event)");
