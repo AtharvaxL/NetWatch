@@ -1,4 +1,4 @@
-﻿# NetWatch C++ Build System
+# NetWatch C++ Build System
 # Supports: Windows (MinGW g++), Linux (g++)
 #
 # Windows usage:
@@ -30,7 +30,7 @@ DASHBOARD  := $(OUTDIR)/dashboard$(EXT)
 SIMULATOR  := $(OUTDIR)/simulator$(EXT)
 TESTS      := $(OUTDIR)/test_netwatch$(EXT)
 
-.PHONY: all clean test run help
+.PHONY: all clean test run stop help
 
 all: $(OUTDIR) $(COLLECTOR) $(AGENT) $(DASHBOARD) $(SIMULATOR) $(TESTS)
 	@echo ""
@@ -74,8 +74,8 @@ test: $(TESTS)
 	@echo "Running NetWatch test suite..."
 	@$(TESTS)
 
-# Linux/macOS only: launch collector + dashboard in background
-run: all
+# Linux/macOS only: kill old instances then launch in background
+run: all stop
 	@echo "Starting collector on UDP :9000..."
 	$(COLLECTOR) &
 	@sleep 1
@@ -85,6 +85,12 @@ run: all
 	@echo "Dashboard ready -> http://localhost:8080"
 	@echo "Now run agents:  ./bin/agent <collector-ip>"
 	@echo "Or simulator:    ./bin/simulator 4 127.0.0.1"
+
+stop:
+	@pkill -f bin/collector 2>/dev/null || true
+	@pkill -f bin/dashboard 2>/dev/null || true
+	@pkill -f bin/simulator 2>/dev/null || true
+	@sleep 1
 
 clean:
 ifeq ($(OS),Windows_NT)

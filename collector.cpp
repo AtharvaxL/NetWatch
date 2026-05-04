@@ -184,6 +184,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Allow rebinding if previous process didn't clean up
+    int reuse = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
+               reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+
     // Set receive timeout so the main loop can check g_running
 #ifdef _WIN32
     DWORD tv = RECV_TIMEOUT_MS;
