@@ -1,4 +1,4 @@
-# NetWatch C++ Build System
+﻿# NetWatch C++ Build System
 # Supports: Windows (MinGW g++), Linux (g++)
 #
 # Windows usage:
@@ -21,7 +21,7 @@ ifeq ($(OS),Windows_NT)
 else
   EXT     :=
   LDFLAGS := -lpthread
-  MKDIR   := mkdir -p $(OUTDIR)
+  MKDIR   := test -d $(OUTDIR) || (rm -f $(OUTDIR) 2>/dev/null; mkdir -p $(OUTDIR))
 endif
 
 COLLECTOR  := $(OUTDIR)/collector$(EXT)
@@ -46,6 +46,8 @@ all: $(OUTDIR) $(COLLECTOR) $(AGENT) $(DASHBOARD) $(SIMULATOR) $(TESTS)
 
 $(OUTDIR):
 	$(MKDIR)
+
+.PHONY: all test clean run help
 
 $(COLLECTOR): collector.cpp nwp.h registry.h anomaly.h
 	$(CXX) $(CXXFLAGS) collector.cpp -o $@ $(LDFLAGS)
