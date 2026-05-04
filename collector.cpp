@@ -62,7 +62,7 @@ static DeviceRegistry    g_registry;
 static std::ofstream     g_log_file;
 
 // ---------------------------------------------------------
-// Logging
+// Logging helpers (thread-safe via cout flush)
 // ---------------------------------------------------------
 static void log(const std::string& level, const std::string& msg) {
     auto now = std::chrono::system_clock::now();
@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
     { std::ofstream f("alerts.json");  }
 
     log("INFO", "==============================================");
-    log("INFO", "  NetWatch Collector v1.0");
+    log("INFO", "  NetWatch Collector v' + COLLECTOR_VERSION +");
     log("INFO", "  UDP port : " + std::to_string(COLLECTOR_PORT));
     log("INFO", "  Snapshot : devices.json (every 2s)");
     log("INFO", "  Alerts   : alerts.json (on event)");

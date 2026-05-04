@@ -105,7 +105,7 @@
       <div class="tab" data-tab="inspector">NWP Inspector</div>
     </div>
     <div id="tab-devices" class="tab-content active">
-      <div id="device-list"><div class="empty-state"><div class="icon">📡</div>Waiting for devices...</div></div>
+      <div id="device-list"><div class="empty-state"><div class="icon">📡</div>Waiting for agents to connect...</div></div>
     </div>
     <div id="tab-alerts" class="tab-content">
       <div id="alert-list"><div class="empty-state"><div class="icon">✅</div>No alerts yet</div></div>
@@ -166,7 +166,7 @@ async function fetchAlerts() {
 function renderDevices() {
   const el = document.getElementById('device-list');
   if (!devices.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">📡</div>Waiting for devices...</div>';
+    el.innerHTML = '<div class="empty-state"><div class="icon">📡</div>Waiting for agents to connect...</div>';
     return;
   }
   el.innerHTML = devices.map(d => `
