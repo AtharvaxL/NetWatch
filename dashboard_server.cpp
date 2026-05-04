@@ -89,7 +89,7 @@ static std::string read_last_lines(const std::string& path, int n = 50) {
 static std::string http_response(int code, const std::string& ctype,
                                   const std::string& body) {
     std::string status = (code == 200) ? "200 OK" :
-                         (code == 404) ? "404 Not Found" : "500 Internal Server Error";
+                         (code == 404) ? "404 Not Found — NetWatch" : "500 Internal Server Error";
     std::ostringstream r;
     r << "HTTP/1.1 " << status << "\r\n"
       << "Content-Type: " << ctype << "\r\n"
