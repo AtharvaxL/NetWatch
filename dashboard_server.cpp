@@ -194,8 +194,20 @@ int main() {
     addr.sin_port        = htons(HTTP_PORT);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(server, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR) {
-        std::cerr << "bind() failed on port " << HTTP_PORT << "\n";
+    bool bound = false;
+    for (int attempt = 1; attempt <= 10; attempt++) {
+        if (bind(server, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != SOCKET_ERROR) {
+            bound = true; break;
+        }
+        fprintf(stderr, "[Dashboard] Port 8080 busy, retrying (%d/10)...\n", attempt);
+#ifndef _WIN32
+        sleep(1);
+#else
+        Sleep(1000);
+#endif
+    }
+    if (!bound) {
+        fprintf(stderr, "[Dashboard] ERROR: Port 8080 still busy. Run: sudo fuser -k 8080/tcp\n");
         return 1;
     }
 

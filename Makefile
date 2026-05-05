@@ -75,22 +75,37 @@ test: $(TESTS)
 	@$(TESTS)
 
 # Linux/macOS only: kill old instances then launch in background
-run: all stop
-	@echo "Starting collector on UDP :9000..."
+run: all
+	@echo "[NetWatch] Freeing ports..."
+	@sudo pkill -9 -x collector 2>/dev/null || true
+	@sudo pkill -9 -x dashboard 2>/dev/null || true
+	@sudo pkill -9 -x simulator 2>/dev/null || true
+	@sudo fuser -k -9 8080/tcp 2>/dev/null || true
+	@sudo fuser -k -9 9000/udp 2>/dev/null || true
+	@sleep 2
+	@echo "[NetWatch] Starting collector..."
 	$(COLLECTOR) &
 	@sleep 1
-	@echo "Starting dashboard on http://localhost:8080"
+	@echo "[NetWatch] Starting dashboard..."
 	$(DASHBOARD) &
+	@sleep 1
+	@echo "[NetWatch] Starting simulator (6 nodes, attack mode)..."
+	$(SIMULATOR) 6 127.0.0.1 attack &
+	@sleep 2
 	@echo ""
-	@echo "Dashboard ready -> http://localhost:8080"
-	@echo "Now run agents:  ./bin/agent <collector-ip>"
-	@echo "Or simulator:    ./bin/simulator 4 127.0.0.1"
+	@echo "============================================"
+	@echo "  NetWatch is running!"
+	@echo "  Dashboard -> http://localhost:8080"
+	@echo "  Ctrl+C will NOT stop it - run: make stop"
+	@echo "============================================"
 
 stop:
-	@pkill -x collector 2>/dev/null || true
-	@pkill -x dashboard 2>/dev/null || true
-	@pkill -x simulator 2>/dev/null || true
-	@sleep 1
+	@sudo pkill -9 -x collector 2>/dev/null || true
+	@sudo pkill -9 -x dashboard 2>/dev/null || true
+	@sudo pkill -9 -x simulator 2>/dev/null || true
+	@sudo fuser -k -9 8080/tcp 2>/dev/null || true
+	@sudo fuser -k -9 9000/udp 2>/dev/null || true
+	@echo "[NetWatch] All processes stopped."
 
 clean:
 ifeq ($(OS),Windows_NT)

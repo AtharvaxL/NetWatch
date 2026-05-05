@@ -188,6 +188,10 @@ int main(int argc, char* argv[]) {
     int reuse = 1;
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
                reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#ifndef _WIN32
+    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT,
+               reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#endif
 
     // Set receive timeout so the main loop can check g_running
 #ifdef _WIN32
